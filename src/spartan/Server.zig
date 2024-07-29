@@ -13,7 +13,7 @@ const Server = @This();
 
 allocator: Allocator,
 
-socket: net.StreamServer,
+socket: net.Server,
 
 pub fn init(allocator: Allocator, options: net.StreamServer.Options) Server {
     return .{

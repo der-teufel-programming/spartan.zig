@@ -162,16 +162,16 @@ pub fn sendRequest(client: *Client, uri: Uri, data: ?[]const u8, options: Option
 
     const host = uri.host orelse return error.UriMissingHost;
 
-    var proper_data = try client.allocator.dupe(u8, if (data) |d| d else "");
-    defer client.allocator.free(proper_data);
-    if (uri.query) |query| {
-        client.allocator.free(proper_data);
-        proper_data = try Uri.unescapeString(client.allocator, query);
-    }
+    if (data != null and uri.query != null) return error.QueryWithData;
 
-    const conn = options.connection orelse try client.connect(host, port);
+    const proper_data = if (data) |d| d else if (uri.query) |query|
+        try query.toRawMaybeAlloc(client.allocator)
+    else
+        null;
 
-    var path = if (uri.path.len > 0) uri.path else "/";
+    const conn = options.connection orelse try client.connect(try host.toRawMaybeAlloc(client.allocator), port);
+
+    var path = if (!uri.path.isEmpty()) try uri.path.toRawMaybeAlloc(client.allocator) else "/";
 
     if (!options.handle_redirects) {
         return requestRaw(
@@ -228,10 +228,10 @@ fn requestRaw(
     if (data) |dat| {
         try connection.writeAll(dat);
     }
-    var res = Response{ .content = undefined };
+    var res: Response = .{ .content = undefined };
 
     var buff = std.io.fixedBufferStream(&work_buf);
-    var inp = buff.writer();
+    const inp = buff.writer();
 
     try connection.reader().streamUntilDelimiter(inp, '\n', null);
     const response_header = buff.getWritten();
@@ -254,7 +254,7 @@ fn requestRaw(
             errdefer client.allocator.free(mime);
             const body = try connection.reader().readAllAlloc(client.allocator, max_size);
 
-            break :success Response.Content{
+            break :success .{
                 .success = .{
                     .mime = mime,
                     .body = body,
@@ -264,21 +264,21 @@ fn requestRaw(
         '3' => redirect: {
             const new_path = try client.allocator.dupe(u8, info);
 
-            break :redirect Response.Content{
+            break :redirect .{
                 .redirect = new_path,
             };
         },
         '4' => client: {
             const errmsg = try client.allocator.dupe(u8, info);
 
-            break :client Response.Content{
+            break :client .{
                 .client_error = errmsg,
             };
         },
         '5' => server: {
             const errmsg = try client.allocator.dupe(u8, info);
 
-            break :server Response.Content{
+            break :server .{
                 .server_error = errmsg,
             };
         },

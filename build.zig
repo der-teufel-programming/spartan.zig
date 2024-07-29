@@ -5,11 +5,11 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     _ = b.addModule("spartan", .{
-        .source_file = .{ .path = "src/spartan.zig" },
+        .root_source_file = b.path("src/spartan.zig"),
     });
 
     const unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/spartan.zig" },
+        .root_source_file = b.path("src/spartan.zig"),
         .target = target,
         .optimize = optimize,
     });
